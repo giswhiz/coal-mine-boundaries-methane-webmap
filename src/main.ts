@@ -8,7 +8,9 @@ import {
   type MapLayerMouseEvent,
   type MapMouseEvent,
 } from 'maplibre-gl'
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+// ?worker&url bundles the worker + maplibre-gl-shared.mjs into one asset.
+// Plain ?url only copies the worker stub, which 404s on shared.mjs in production.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 import { addSubtleHillshade, OPENFREEMAP_STYLE_URL, refineBasemapStyle } from './basemap'
@@ -37,7 +39,9 @@ import {
 } from './types'
 import './style.css'
 
-setWorkerUrl(maplibreWorkerUrl)
+// MapLibre treats URLs ending in .mjs as module workers; Vite's ?worker&url
+// asset may not end in .mjs, so append a hash fragment that preserves the suffix.
+setWorkerUrl(`${maplibreWorkerUrl}#.mjs`)
 
 const mapContainer = document.querySelector<HTMLElement>('#map')
 const legendContainer = document.querySelector<HTMLElement>('#legend')
@@ -214,12 +218,17 @@ map.on('load', async () => {
   }
 })
 
+function interactiveLayersPresent(): string[] {
+  return INTERACTIVE_LAYER_IDS.filter((layerId) => map.getLayer(layerId) != null)
+}
+
 map.on('click', (event: MapMouseEvent) => {
   previewPopup.remove()
 
-  const features = map.queryRenderedFeatures(event.point, {
-    layers: [...INTERACTIVE_LAYER_IDS],
-  })
+  const layers = interactiveLayersPresent()
+  if (layers.length === 0) return
+
+  const features = map.queryRenderedFeatures(event.point, { layers })
   const feature = features[0]
   if (!feature) {
     pinnedPopup.remove()
